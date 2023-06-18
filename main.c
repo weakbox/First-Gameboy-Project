@@ -5,6 +5,7 @@
 
 // Tilesets created by gbtd.
 #include "player.c"
+#include "demon.c"
 #include "window.c"
 
 // Bit mask to determine only the joypad bit that relates to D-pad button input.
@@ -17,10 +18,56 @@
 #define Y_MAX 0x90
 
 int16_t player_coords[2];    // Format: x, y
-int8_t player_has_collided_x_min = 0;
-int8_t player_has_collided_x_max = 0;
-int8_t player_has_collided_y_min = 0;
-int8_t player_has_collided_y_max = 0;
+uint8_t player_has_collided_x_min = 0;
+uint8_t player_has_collided_x_max = 0;
+uint8_t player_has_collided_y_min = 0;
+uint8_t player_has_collided_y_max = 0;
+
+// Structure to define the demon entity which will attack the player.
+typedef struct _Demon
+{
+    int16_t pos_x;
+    int16_t pos_y;
+    uint8_t timer;
+}   Demon;
+
+// Pathfinding logic to allow the demon to hunt the player.
+void demon_logic(Demon* demon)
+{
+    if(demon->timer >= 1)   // Demon pathfinds on every other frame.
+    {
+        // See where player is located:
+        if(player_coords[0] > demon->pos_x)
+        {
+            demon->pos_x++;
+            set_sprite_tile(1, 0x0D);
+            scroll_sprite(1, 1, 0);
+        }
+        else if(player_coords[0] < demon->pos_x)
+        {
+            demon->pos_x--;
+            set_sprite_tile(1, 0x0C);
+            scroll_sprite(1, -1, 0);
+        }
+        else if(player_coords[1] > demon->pos_y)
+        {   
+            demon->pos_y++;
+            set_sprite_tile(1, 0x0B);
+            scroll_sprite(1, 0, 1);
+        }
+        else if(player_coords[1] < demon->pos_y)
+        {
+            scroll_sprite(1, 0, -1);
+            set_sprite_tile(1, 0x0A);
+            demon->pos_y--;
+        }
+        demon->timer = 0;
+    }
+    else
+    {
+        demon->timer++;
+    }
+}
 
 // Loads a font into VRAM.
 void load_font(uint8_t font[])
@@ -214,10 +261,20 @@ void player_movement()
     }
 }
 
+// Displays the title screen. When user presses the START button the code continues to execute.
+void title_screen()
+{
+    printf("DEMON CHASE\n\nWEAKBOX INSTUSTRIES 2023\n\n\n\n\nPRESS START");
+    waitpad(J_START);
+    printf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
+}
+
 void main()
 {
     load_font(font_min);
     init_sound();
+
+    title_screen();
 
     // Setup player sprite.
     set_sprite_data(0, 9, player);
@@ -225,10 +282,20 @@ void main()
     player_coords[0] = 0x18;
     player_coords[1] = 0x20;
     move_sprite(0, player_coords[0], player_coords[1]);
+    
+    // Setup demon sprite.
+    set_sprite_data(9, 9, demon);
+    set_sprite_tile(1, 9);
+
+    Demon demon;
+    demon.pos_x = 0x80; // Sets the demon's spawnpoint coordinates.
+    demon.pos_y = 0x80;
+    demon.timer = 0;
+    move_sprite(1, demon.pos_x, demon.pos_y);   // Spawns the demon in at his spawn coordinates.
+
     SHOW_SPRITES;
 
-    set_win_tiles(0, 0, 19
-    , 1, window);
+    set_win_tiles(0, 0, 19, 1, window);
     move_win(0x08, 0x88);
     SHOW_WIN;
     DISPLAY_ON;
@@ -236,6 +303,7 @@ void main()
     while(1)
     {
         player_movement();
+        demon_logic(&demon);
         wait_vbl_done();    // Seems to frame limit to 60 fps.
     }
 }
