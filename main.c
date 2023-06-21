@@ -311,12 +311,30 @@ void main()
                 SHOW_WIN;
                 DISPLAY_ON;
 
+                initrand(0);
                 init_coin(&coin, 100, 100);
+
+                uint8_t i = 0;
+                uint8_t j = 0;
 
                 while(!check_collisions(&_demon))
                 {
                     player_movement();
                     demon_logic(&_demon);
+
+                    if(i > 30)
+                    {
+                        move_coin(&coin);
+                        i = 0;
+                    }
+                    i++;
+                    if(j > 5)
+                    {
+                        animate_coin();
+                        j = 0;
+                    }
+                    j++;
+
                     wait_vbl_done();    // Seems to frame limit to 60 fps.
                 }
 
