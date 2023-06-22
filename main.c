@@ -11,49 +11,80 @@ uint8_t player_has_collided_x_max = 0;
 uint8_t player_has_collided_y_min = 0;
 uint8_t player_has_collided_y_max = 0;
 
+uint8_t seed = 0;
+
 // Structure to define the demon entity which will attack the player.
 typedef struct _Demon
 {
     int16_t pos_x;
     int16_t pos_y;
-    uint8_t timer;
 }   Demon;
 
 // Pathfinding logic to allow the demon to hunt the player.
 void demon_logic(Demon* demon)
 {
-    if(demon->timer >= 1)   // Demon pathfinds on every other frame.
+    // Generate a random number to decide between x and y movement:
+    switch(get_random_number_in_range(0, 1))
     {
-        // See where player is located:
-        if(player_coords[0] > demon->pos_x)
-        {
-            demon->pos_x++;
-            set_sprite_tile(1, 0x0D);
-            scroll_sprite(1, 1, 0);
-        }
-        else if(player_coords[0] < demon->pos_x)
-        {
-            demon->pos_x--;
-            set_sprite_tile(1, 0x0C);
-            scroll_sprite(1, -1, 0);
-        }
-        else if(player_coords[1] > demon->pos_y)
-        {   
-            demon->pos_y++;
-            set_sprite_tile(1, 0x0B);
-            scroll_sprite(1, 0, 1);
-        }
-        else if(player_coords[1] < demon->pos_y)
-        {
-            scroll_sprite(1, 0, -1);
-            set_sprite_tile(1, 0x0A);
-            demon->pos_y--;
-        }
-        demon->timer = 0;
-    }
-    else
-    {
-        demon->timer++;
+        case 0: // Horizontal movement:
+            if(player_coords[0] > demon->pos_x)
+            {
+                demon->pos_x++;
+                set_sprite_tile(1, 0x0D);
+                scroll_sprite(1, 1, 0);
+            }
+            else if(player_coords[0] < demon->pos_x)
+            {
+                demon->pos_x--;
+                set_sprite_tile(1, 0x0C);
+                scroll_sprite(1, -1, 0);
+            }
+            else
+            {
+                if(player_coords[1] > demon->pos_y)
+                {   
+                    demon->pos_y++;
+                    set_sprite_tile(1, 0x0B);
+                    scroll_sprite(1, 0, 1);
+                }
+                else if(player_coords[1] < demon->pos_y)
+                {
+                    scroll_sprite(1, 0, -1);
+                    set_sprite_tile(1, 0x0A);
+                    demon->pos_y--;
+                }
+            }
+            break;
+
+        case 1:
+            if(player_coords[1] > demon->pos_y)
+            {   
+                demon->pos_y++;
+                set_sprite_tile(1, 0x0B);
+                scroll_sprite(1, 0, 1);
+            }
+            else if(player_coords[1] < demon->pos_y)
+            {
+                scroll_sprite(1, 0, -1);
+                set_sprite_tile(1, 0x0A);
+                demon->pos_y--;
+            }
+            else
+            {
+                if(player_coords[0] > demon->pos_x)
+                {
+                    demon->pos_x++;
+                    set_sprite_tile(1, 0x0D);
+                    scroll_sprite(1, 1, 0);
+                }
+                else if(player_coords[0] < demon->pos_x)
+                {
+                    demon->pos_x--;
+                    set_sprite_tile(1, 0x0C);
+                    scroll_sprite(1, -1, 0);
+                }
+            }
+            break;
     }
 }
 
@@ -83,6 +114,16 @@ void play_bonk_sfx()
     NR12_REG = 0xF3;
     NR13_REG = 0x00;
     NR14_REG = 0x87;
+}
+
+// Plays a coin sound effect.
+void play_coin_sfx()
+{
+    NR10_REG = 0x26;
+    NR11_REG = 0x45;
+    NR12_REG = 0xF8;
+    NR13_REG = 0xB6;
+    NR14_REG = 0xC7;
 }
 
 // Detects if the player has collided with the Gameboy screen walls.
@@ -252,6 +293,7 @@ void player_movement()
 // Displays the title screen. When user presses the START button the code continues to execute.
 void title_screen()
 {
+    gotoxy(0, 0);
     printf("DEMON CHASE\n\nWEAKBOX INSTUSTRIES 2023\n\n\n\n\nPRESS START\n\n\n\n");
     waitpad(J_START);
     printf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
@@ -261,6 +303,7 @@ void title_screen()
 void death_screen()
 {
     play_bonk_sfx();
+    gotoxy(0, 0);
     printf("YOU DIED\n\n\n");
 }
 
@@ -295,13 +338,15 @@ void main()
                 set_sprite_data(9, 9, demon);
                 set_sprite_tile(1, 9);
 
+                // RNG generator:
+                seed++;
+
                 state++;
                 break;
 
             case 1: // Game state.
                 _demon.pos_x = 0x80; // Sets the demon's spawnpoint coordinates.
                 _demon.pos_y = 0x80;
-                _demon.timer = 0;
                 move_sprite(1, _demon.pos_x, _demon.pos_y);   // Spawns the demon in at his spawn coordinates.
 
                 SHOW_SPRITES;
@@ -311,30 +356,19 @@ void main()
                 SHOW_WIN;
                 DISPLAY_ON;
 
-                initrand(0);
+                initrand(seed);
                 init_coin(&coin, 100, 100);
 
                 uint8_t i = 0;
                 uint8_t j = 0;
 
+                draw_hud();
+
                 while(!check_collisions(&_demon))
                 {
                     player_movement();
                     demon_logic(&_demon);
-
-                    if(i > 30)
-                    {
-                        move_coin(&coin);
-                        i = 0;
-                    }
-                    i++;
-                    if(j > 5)
-                    {
-                        animate_coin();
-                        j = 0;
-                    }
-                    j++;
-
+                    coin_logic();
                     wait_vbl_done();    // Seems to frame limit to 60 fps.
                 }
 
